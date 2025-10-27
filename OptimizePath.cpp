@@ -1,13 +1,56 @@
+// ============================================================================
 // File: OptimizePath.cpp
-// Description: Reads a list of (X,Y,Z) points, optimizes their traversal order
-//              to minimize path length (simple nearest-neighbor heuristic),
-//              and displays both original and optimized paths using ROOT.
+// Author: Luciano Ristori
+// Created: October 2025
+// Version: 0.9.0
+//
+// Description:
+//   This program reads a list of labeled 3D points (X, Y, Z) — typically
+//   coordinates from a CMM scan or similar measurement set — and determines
+//   an optimized traversal order that minimizes the total path length between
+//   consecutive points.
+//
+//   The optimization is based on a simple greedy nearest-neighbor heuristic,
+//   which provides a fast but non-global approximation to the optimal
+//   Traveling Salesman path.  The resulting order is useful for minimizing
+//   travel time or repositioning movements in scanning or machining systems.
+//
+//   The program outputs:
+//     • Console summary of the original and optimized path lengths
+//     • A reordered CSV file containing the optimized sequence
+//     • Three interactive ROOT canvases:
+//         1. Original path (red)
+//         2. Optimized path (blue)
+//         3. Both paths superimposed for visual comparison
 //
 // Usage:
 //   ./OptimizePath input.csv output.csv
 //
-// The program creates a ROOT canvas showing the paths and writes the optimized
-// sequence to the output CSV file.
+// Input format (CSV or space-separated):
+//   label,X,Y,Z
+//   or
+//   X,Y,Z               (label optional)
+//
+// Output format:
+//   label,X,Y,Z         (in optimized order)
+//
+// Dependencies:
+//   • ROOT framework (for visualization)
+//   • Points.h / Points.cpp from ../common (defines Point structure and I/O)
+//
+// Compilation:
+//   Handled by the provided Makefile using root-config for automatic linking.
+//   Example:
+//       make clean && make
+//
+// Notes:
+//   - The algorithm is deterministic and assumes the first point as the start.
+//   - Path lengths are computed in 3D Euclidean space.
+//   - The program is intended for exploratory analysis, visualization, and
+//     workflow optimization, not for rigorous combinatorial minimization.
+//
+// ============================================================================
+
 
 #include <iostream>
 #include <fstream>
@@ -88,7 +131,8 @@ void writeReorderedPoints(const string& outFile, const vector<Point>& pts, const
         exit(1);
     }
     for (int idx : order) {
-        out << pts[idx].coords[0] << ","
+        out << pts[idx].label << ","
+            << pts[idx].coords[0] << ","
             << pts[idx].coords[1] << ","
             << pts[idx].coords[2] << "\n";
     }
@@ -132,35 +176,72 @@ int main(int argc, char** argv) {
     // Write reordered points
     writeReorderedPoints(outFile, pts, optOrder);
 
-    // Create graph for original and optimized paths
-    TCanvas* c1 = new TCanvas("c1", "Path Optimization", 1000, 700);
-    gStyle->SetOptStat(0);
+   //------------------------------------------------------------------------------
+// Visualization: three separate canvases for original, optimized, and comparison
+//------------------------------------------------------------------------------
+gStyle->SetOptStat(0);
 
-    TGraph* gOrig = new TGraph(pts.size());
-    TGraph* gOpt = new TGraph(pts.size());
-    for (size_t i = 0; i < pts.size(); ++i) {
-        gOrig->SetPoint(i, pts[origOrder[i]].coords[0], pts[origOrder[i]].coords[1]);
-        gOpt->SetPoint(i, pts[optOrder[i]].coords[0], pts[optOrder[i]].coords[1]);
-    }
+// --- 1. Original path ---
+TCanvas* c1 = new TCanvas("c1", "Original Path", 800, 600);
+(void)c1;
+TGraph* gOrig = new TGraph(pts.size());
+for (size_t i = 0; i < pts.size(); ++i)
+    gOrig->SetPoint(i, pts[origOrder[i]].coords[0], pts[origOrder[i]].coords[1]);
+gOrig->SetLineColor(kRed);
+gOrig->SetLineWidth(2);
+gOrig->SetMarkerStyle(20);
+gOrig->SetTitle("Original Path;X;Y");
+gOrig->Draw("ALP");
 
-    gOrig->SetLineColor(kRed);
-    gOrig->SetLineWidth(2);
-    gOrig->SetMarkerStyle(20);
-    gOrig->SetTitle("Original Path;X;Y");
+TLegend* leg1 = new TLegend(0.75, 0.82, 0.92, 0.9);
+leg1->AddEntry(gOrig, "Original Path", "lp");
+leg1->Draw();
 
-    gOpt->SetLineColor(kBlue);
-    gOpt->SetLineWidth(2);
-    gOpt->SetMarkerStyle(21);
+// --- 2. Optimized path ---
+TCanvas* c2 = new TCanvas("c2", "Optimized Path", 800, 600);
+(void)c2;
+TGraph* gOpt = new TGraph(pts.size());
+for (size_t i = 0; i < pts.size(); ++i)
+    gOpt->SetPoint(i, pts[optOrder[i]].coords[0], pts[optOrder[i]].coords[1]);
+gOpt->SetLineColor(kBlue);
+gOpt->SetLineWidth(2);
+gOpt->SetMarkerStyle(21);
+gOpt->SetTitle("Optimized Path;X;Y");
+gOpt->Draw("ALP");
 
-    gOrig->Draw("ALP");
-    gOpt->Draw("LP SAME");
+TLegend* leg2 = new TLegend(0.75, 0.82, 0.92, 0.9);
+leg2->AddEntry(gOpt, "Optimized Path", "lp");
+leg2->Draw();
 
-    // Add legend
-    TLegend* leg = new TLegend(0.7, 0.8, 0.9, 0.9);
-    leg->AddEntry(gOrig, "Original Path", "lp");
-    leg->AddEntry(gOpt, "Optimized Path", "lp");
-    leg->Draw();
+// --- 3. Comparison: both paths superimposed ---
+TCanvas* c3 = new TCanvas("c3", "Comparison: Original vs Optimized", 900, 700);
+(void)c3;
+TGraph* gOrig2 = new TGraph(*gOrig); // copy
+TGraph* gOpt2  = new TGraph(*gOpt);
 
-    app.Run();  // Keeps the plot window open
+gOrig2->SetLineColor(kRed);
+gOrig2->SetLineWidth(2);
+gOrig2->SetMarkerStyle(20);
+gOrig2->SetTitle("Original (Red) vs Optimized (Blue);X;Y");
+
+gOpt2->SetLineColor(kBlue);
+gOpt2->SetLineWidth(2);
+gOpt2->SetMarkerStyle(21);
+
+gOrig2->Draw("ALP");
+gOpt2->Draw("LP SAME");
+
+TLegend* leg3 = new TLegend(0.7, 0.8, 0.9, 0.9);
+leg3->AddEntry(gOrig2, "Original Path", "lp");
+leg3->AddEntry(gOpt2, "Optimized Path", "lp");
+leg3->Draw();
+
+// --- Update and run interactive session ---
+c1->Update();
+c2->Update();
+c3->Update();
+
+app.Run();  // Keeps all canvases open
+
     return 0;
 }

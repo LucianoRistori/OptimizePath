@@ -6,32 +6,35 @@
 # Description:
 #   Builds the OptimizePath program using the shared common/ module.
 #   Implements heuristic optimization of CMM measurement order
-#   (Traveling Salesman-style problem).
+#   (Traveling Salesman-style problem) with ROOT visualization.
 # ===============================================================
 
 # ---- Compiler and Flags ----
 CXX      := clang++
 CXXFLAGS := -O2 -Wall -Wextra -Wno-cpp -stdlib=libc++ -mmacosx-version-min=13.0 \
-            -std=c++17 -Wno-c++17-extensions -pthread -m64
-INCLUDES := -I../common
-LDFLAGS  :=
-LIBS     := -lm -ldl -lpthread
+            -std=c++17 -pthread -m64
+INCLUDES := -I../common $(shell root-config --cflags)
+LIBS     := $(shell root-config --libs) -Wl,-rpath,$(shell root-config --libdir) \
+            -lm -ldl -lpthread
 
 # ---- Targets ----
-TARGET    := OptimizePath
-OBJS      := OptimizePath.o ../common/Points.o
+TARGET := OptimizePath
+OBJS   := OptimizePath.o ../common/Points.o
 
 # ---- Default Rule ----
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) -o $@ $(LDFLAGS) $(LIBS)
+	@echo "Linking $@..."
+	$(CXX) $(CXXFLAGS) $(OBJS) -o $@ $(INCLUDES) $(LIBS)
 
-# ---- Pattern Rule for Compilation ----
+# ---- Compilation Rules ----
 %.o: %.cpp
+	@echo "Compiling $<..."
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 ../common/Points.o: ../common/Points.cpp ../common/Points.h
+	@echo "Compiling common/Points.cpp..."
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c ../common/Points.cpp -o ../common/Points.o
 
 # ---- Cleaning ----
